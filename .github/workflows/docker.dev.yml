@@ -1,0 +1,54 @@
+name: Feature Branch - Docker Build
+
+on:
+  pull_request:
+    branches:
+      - 'develop'
+
+permissions:
+  packages: write
+
+jobs:
+ build_docker:
+  runs-on: ubuntu-latest
+  steps:
+   - name: Set lower case Github repository name
+     run: |
+      echo "GH_REPO_LC=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
+     env:
+      GITHUB_REPOSITORY: ${{ github.repository }}
+
+   - name: Checkout code
+     uses: actions/checkout@v3
+
+   - name: Set up Docker Buildx
+     uses: docker/setup-buildx-action@v3
+
+   - name: Login to Github Container Registry
+     uses: docker/Login-action@v3
+     with:
+      registry: ghcr.io
+      username: ${{ github.actor }}
+      password: ${{ secrets.GITHUB_TOKEN }}
+
+   - name: Prepare Image tag name
+     run: |
+      # Extracting the substring after "refs/heads/"
+      BRANCH_NAME=${GITHUB_REF#refs/heads/}
+
+      # Converting to lower case and replacing '/' with '-'
+      BRANCH_NAME_LOWERCASE=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]' | sed 's|/|-|g')
+
+      # Creating new enviornment variable
+      echo "TAG_NAME=${BRANCH_NAME_LOWERCASE}" >> ${GITHUB_ENV}
+
+     env:
+      GITHUB_REF: ${{ github.ref_name }}
+
+   - name: Build Docker image
+     uses: docker/build-push-action@v3
+     with:
+      context: .
+      file: ./Dockerfile
+      push: true
+      tags: ghcr.io/${{ env.GH_REPO_LC }}:${{ env.TAG_NAME }}
